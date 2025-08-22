@@ -43,66 +43,8 @@ const allies = [];
 // 選択中のキャラクター（クリックで選択）
 let selectedCharacter = null;
 
-// ---- 敵・味方追加 ----
-// ランダム位置に敵を追加
-function addEnemy() {
-  enemies.push({
-    //敵のランダム生成
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    // 敵の大きさ
-    radius: 8, 
-    // 射線表示用
-    mouseX: Math.random() * canvas.width, 
-    mouseY: Math.random() * canvas.height,
-    // 種別
-    type: "enemy" 
-  });
-}
 
-// ランダム位置に味方を追加
-function addAlly() {
-  allies.push({
-    //味方のランダム生成
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    //味方の大きさ
-    radius: 8,
-    //射線表示用
-    mouseX: Math.random() * canvas.width,
-    mouseY: Math.random() * canvas.height,
-    //種別
-    type: "ally"
-  });
-}
 
-// 敵の描画
-function drawEnemies() {
-  enemies.forEach(e => {
-    // 敵の色
-    ctx.fillStyle = "red"; 
-    ctx.beginPath();
-    //敵を丸く描画
-    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-    ctx.fill();
-    // 選択中の敵には黄色の枠
-    if (selectedCharacter === e) { ctx.strokeStyle = "yellow"; ctx.stroke(); }
-  });
-}
-
-// 味方の描画
-function drawAllies() {
-  allies.forEach(a => {
-    // 味方は緑
-    ctx.fillStyle = "green"; 
-    ctx.beginPath();
-    //味方を丸く描画
-    ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
-    ctx.fill();
-    // 選択中の敵には黄色の枠
-    if (selectedCharacter === a) { ctx.strokeStyle = "yellow"; ctx.stroke(); }
-  });
-}
 
 // ---- 障害物管理 ----
 // 編集モード中はtrue
@@ -204,84 +146,10 @@ function createTrapezoidAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
 
-// ---- 射線が障害物に当たるまで交点を計算 ----
-// (sx,sy) → (ex,ey) に向かって直線を飛ばし、最も近い障害物の衝突点を返す
-function castRayUntilObstacle(sx, sy, ex, ey) {
-  const ray = { a: { x: sx, y: sy }, b: { x: ex, y: ey } };
-  let closest = null;
-  for (const ob of obstacles) {
-    for (const shape of ob.shapes) {
-      for (let i = 0; i < shape.length; i++) {
-        const seg = { a: shape[i], b: shape[(i + 1) % shape.length] };
-        const hit = getIntersection(ray, seg);
-        if (hit && (!closest || hit.dist < closest.dist)) closest = hit;
-      }
-    }
-  }
-  // 交点があれば交点、なければ元のターゲット座標を返す
-  return closest ? { x: closest.x, y: closest.y } : { x: ex, y: ey };
-}
-
-// ---- チェックボックス制御 ----
-// FOV・射線のON/OFFをUIから切り替える
-document.getElementById("showLines").addEventListener("change", e => showLines = e.target.checked);
-document.getElementById("showFOV").addEventListener("change", e => showFOV = e.target.checked);
 
 // ---- キー入力状態 ----
 document.addEventListener("keydown", e => keysPressed[e.key] = true);
 document.addEventListener("keyup", e => keysPressed[e.key] = false);
-// ---- マウス移動イベント ----
-// マウスが動くたびに座標を取得し、選択中キャラの視線方向を更新
-// ✅ キャラクターをドラッグ中なら位置をマウスに追従
-canvas.addEventListener("mousemove", e => {
-  const r = canvas.getBoundingClientRect();
-  const mx = e.clientX - r.left;
-  const my = e.clientY - r.top;
-
-  // ✅ ドラッグ中はキャラを移動、射線方向は更新しない
-  if (isDraggingCharacter && draggedCharacter) {
-    const rsize = 8;
-    const nx = Math.max(rsize, Math.min(canvas.width - rsize, mx));
-    const ny = Math.max(rsize, Math.min(canvas.height - rsize, my));
-
-    if (draggedCharacter.type === "player") {
-      playerX = nx;
-      playerY = ny;
-    } else {
-      draggedCharacter.x = nx;
-      draggedCharacter.y = ny;
-    }
-  }
-
-  // ✅ ドラッグしていないときのみ射線方向を更新（既存処理）
-  mouseX = mx;
-  mouseY = my;
-
-  if (selectedCharacter?.type === "player") {
-    playerView = { x: mouseX, y: mouseY };
-  }
-  if (selectedCharacter && (selectedCharacter.type === "enemy" || selectedCharacter.type === "ally")) {
-    selectedCharacter.mouseX = mouseX;
-    selectedCharacter.mouseY = mouseY;
-  }
-});
-
-
-canvas.addEventListener("mouseup", () => {
-  if (isDraggingCharacter) {
-    isDraggingCharacter = false;
-    draggedCharacter = null;
-    // ✅ ドロップ直後にマウス方向を射線更新
-    playerView = { x: mouseX, y: mouseY };
-    if (selectedCharacter && (selectedCharacter.type === "enemy" || selectedCharacter.type === "ally")) {
-      selectedCharacter.mouseX = mouseX;
-      selectedCharacter.mouseY = mouseY;
-    }
-  }
-});
-
-
-
 
 // ---- クリック選択 ----
 // キャラ・障害物をクリックしたら選択
@@ -379,12 +247,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ["addObstacleBtn","applyRotationBtn","clearObstaclesBtn","mirrorObstaclesBtn"]
       .forEach(id => { const b=document.getElementById(id); if(b) b.disabled=!isEditMode; });
 
-    // ✅ 射線管理モードではプレイヤー選択
-    if (!isEditMode) {
-      selectedCharacter = { type: "player" };
-    } else {
-      selectedCharacter = null;
-    }
 
     updateDeleteBtnUI();
     //updateMobileControlsUI(); // ✅ モバイルUI制御
@@ -484,17 +346,6 @@ document.getElementById("mirrorObstaclesBtn").addEventListener("click", () => {
   updateObstacleList();
 });
 
-// キャラ追加・削除
-document.getElementById("addEnemyBtn").addEventListener("click", addEnemy);
-document.getElementById("addAllyBtn").addEventListener("click", addAlly);
-document.getElementById("deleteCharacterBtn").addEventListener("click", () => {
-  if (!selectedCharacter) return;
-  if (selectedCharacter.type === "enemy") enemies.splice(enemies.indexOf(selectedCharacter), 1);
-  else if (selectedCharacter.type === "ally") allies.splice(allies.indexOf(selectedCharacter), 1);
-  selectedCharacter = null;
-  updateDeleteBtnUI();
-});
-
 // ---- 障害物描画 ----
 function drawObstacles() {
   obstacles.forEach((o, i) => {
@@ -509,120 +360,23 @@ function drawObstacles() {
     });
   });
 }
-
-// ---- 射線描画（障害物で遮断）----
-function drawLineOfSightControlled(entity, color) {
-  let tx, ty;
-  if (entity.type === "player") {
-    tx = (selectedCharacter?.type === "player") ? mouseX : playerView.x;
-    ty = (selectedCharacter?.type === "player") ? mouseY : playerView.y;
-  } else {
-    if (selectedCharacter === entity) { tx = mouseX; ty = mouseY; }
-    else { tx = entity.mouseX; ty = entity.mouseY; }
-  }
-  // ✅ 障害物との交点まで射線を制限
-  const hitPoint = castRayUntilObstacle(entity.x, entity.y, tx, ty);
-  drawLine(entity.x, entity.y, hitPoint.x, hitPoint.y, color);
-}
-
-// 線を描画
-function drawLine(x, y, tx, ty, col) {
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(tx, ty);
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-}
-
-// ---- FOV描画（障害物で遮断）----
-// 射線と線分の交差判定
-function getIntersection(ray, seg) {
-  const r_px = ray.a.x, r_py = ray.a.y;
-  const r_dx = ray.b.x - ray.a.x, r_dy = ray.b.y - ray.a.y;
-  const s_px = seg.a.x, s_py = seg.a.y;
-  const s_dx = seg.b.x - seg.a.x, s_dy = seg.b.y - seg.a.y;
-
-  const r_mag = Math.sqrt(r_dx * r_dx + r_dy * r_dy);
-  const s_mag = Math.sqrt(s_dx * s_dx + s_dy * s_dy);
-  if (r_dx / r_mag === s_dx / s_mag && r_dy / r_mag === s_dy / s_mag) return null;
-
-  const T2 = (r_dx * (s_py - r_py) + r_dy * (r_px - s_px)) / (s_dx * r_dy - s_dy * r_dx);
-  const T1 = (s_px + s_dx * T2 - r_px) / r_dx;
-
-  if (T1 < 0) return null;
-  if (T2 < 0 || T2 > 1) return null;
-
-  return { x: r_px + r_dx * T1, y: r_py + r_dy * T1, dist: T1 * r_mag };
-}
-
-// 汎用FOV描画関数
-function drawFOVGeneric(x, y, c, tx, ty) {
-  const at = Math.atan2(ty - y, tx - x);
-  const rc = 100; // レイキャスト本数
-  const sa = at - fovAngle / 2;
-  const max = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
-  const rays = [];
-
-  // FOVをレイキャストで描画
-  for (let i = 0; i <= rc; i++) {
-    const a = sa + (i / rc) * fovAngle;
-    const dx = Math.cos(a), dy = Math.sin(a);
-    const re = { x: x + dx * max, y: y + dy * max };
-    const ray = { a: { x, y }, b: re };
-    let cl = null;
-
-    // 障害物との最短交点を探す
-    for (const ob of obstacles) {
-      for (const s of ob.shapes) {
-        for (let j = 0; j < s.length; j++) {
-          const seg = { a: s[j], b: s[(j + 1) % s.length] };
-          const it = getIntersection(ray, seg);
-          if (it && (!cl || it.dist < cl.dist)) cl = it;
-        }
-      }
-    }
-    rays.push(cl || re);
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  rays.forEach(p => ctx.lineTo(p.x, p.y));
-  ctx.closePath();
-  ctx.fillStyle = c;
-  ctx.fill();
-}
-
-// FOV描画関数（各キャラ用）
-function drawPlayerFOV() { drawFOVGeneric(playerX, playerY, "rgba(0,255,0,0.3)", playerView.x, playerView.y); }
-function drawEnemyFOV(e) { drawFOVGeneric(e.x, e.y, "rgba(255,0,0,0.3)", e.mouseX, e.mouseY); }
-function drawAllyFOV(a) { drawFOVGeneric(a.x, a.y, "rgba(0,255,0,0.3)", a.mouseX, a.mouseY); }
-
 // ---- グリッド描画（番号付き）----
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let i = 0; i <= cols; i++) {
-    ctx.beginPath(); ctx.lineWidth = i % 2 === 0 ? 2 : 0.5;
+    ctx.beginPath(); ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#888";
     ctx.moveTo(i * cellSize, 0); ctx.lineTo(i * cellSize, canvas.height); ctx.stroke();
     if (i % 2 === 0 && i < cols) { ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText(i, i * cellSize + 2, 10); }
   }
   for (let j = 0; j <= rows; j++) {
-    ctx.beginPath(); ctx.lineWidth = j % 2 === 0 ? 2 : 0.5;
+    ctx.beginPath(); ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#888";
     ctx.moveTo(0, j * cellSize); ctx.lineTo(canvas.width, j * cellSize); ctx.stroke();
     if (j % 2 === 0 && j < rows) { ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText(j, 2, j * cellSize + 10); }
   }
 }
 
-// プレイヤー描画
-function drawPlayer() {
-  ctx.beginPath();
-  ctx.arc(playerX, playerY, 8, 0, Math.PI * 2);
-  ctx.fillStyle = "green";//初期プレイヤーの色
-  ctx.fill();
-  if (selectedCharacter?.type === "player") { ctx.strokeStyle = "yellow"; ctx.stroke(); }
-}
 
 // 点がポリゴン内か判定
 function isPointInPolygon(pt, poly) {
@@ -639,34 +393,13 @@ function isPointInPolygon(pt, poly) {
 // ✅ 射線管理モードのとき、スマホ画面なら十字ボタン表示
 function updateMobileControlsUI() {
   const mc = document.getElementById("mobileControls");
-  if (window.innerWidth <= 768000000) {
     mc.style.display = "flex";
-  } else {
-    mc.style.display = "none";
-  }
 }
 
 
 // ---- メインループ ----
 // 毎フレーム呼ばれる関数。描画と状態更新を行う
 function animate() {
-  // --- キャラクター移動処理 ---
-  if (selectedCharacter) {
-    const r = 8;
-    const move = { dx: 0, dy: 0 };
-    if (keysPressed.ArrowUp) move.dy -= playerSpeed;
-    if (keysPressed.ArrowDown) move.dy += playerSpeed;
-    if (keysPressed.ArrowLeft) move.dx -= playerSpeed;
-    if (keysPressed.ArrowRight) move.dx += playerSpeed;
-
-    if (selectedCharacter.type === "player") {
-      playerX = Math.max(r, Math.min(canvas.width - r, playerX + move.dx));
-      playerY = Math.max(r, Math.min(canvas.height - r, playerY + move.dy));
-    } else {
-      selectedCharacter.x = Math.max(r, Math.min(canvas.width - r, selectedCharacter.x + move.dx));
-      selectedCharacter.y = Math.max(r, Math.min(canvas.height - r, selectedCharacter.y + move.dy));
-    }
-  }
 
   // --- 障害物移動（編集モード時のみ）---
   if (isEditMode && selectedObstacleIndex !== null) {
@@ -683,8 +416,6 @@ function animate() {
       o.anchorPoint.y += dy;
     }
   }
-
-
 // 二本指操作禁止（ピンチ検出）
 document.addEventListener('touchmove', function (e) {
     if (e.touches.length > 1) {
@@ -722,31 +453,6 @@ window.addEventListener('orientationchange', setViewportUnits);
 
   // --- 描画処理 ---
   drawGrid(); // グリッド描画
-
-  // 編集モードではFOV・射線は非表示
-  if (!isEditMode) {
-    // FOVチェックがON → FOVを描画
-    if (showFOV) {
-      drawPlayerFOV();
-      enemies.forEach(drawEnemyFOV);
-      allies.forEach(drawAllyFOV);
-    }
-
-    // 射線チェックがON → 射線を障害物で遮断しながら描画
-    if (showLines) {
-      //自分の射線の色
-      drawLineOfSightControlled({ x: playerX, y: playerY, type: "player" }, "lime");
-      //敵の射線の色
-      enemies.forEach(e => drawLineOfSightControlled(e, "red"));
-      //味方の射線描画
-      allies.forEach(a => drawLineOfSightControlled(a, "lime")); 
-    }
-
-    // キャラクターの描画
-    drawPlayer();
-    drawEnemies();
-    drawAllies();
-  }
 
   // 障害物を常に描画
   drawObstacles();

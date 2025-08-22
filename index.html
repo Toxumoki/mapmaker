@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
 
-
-
 <head>
   <meta charset="UTF-8">
 <!-- スマホ画面にフィットし、ズームを禁止 -->
@@ -17,7 +15,6 @@
   <!-- ✅ タブメニュー -->
   <div id="tabMenu">
     <button class="tab active" data-target="editPanel">編集モード</button>
-    <button class="tab" data-target="shootingPanel">射線管理モード</button>
   </div>
   <div class="field">
     <!-- ✅ キャンバス（左側） -->
@@ -61,17 +58,6 @@
         <ul id="obstacleList"></ul>
       </div>
 
-      <!-- ✅ 射線管理モードパネル -->
-      <div id="shootingPanel" class="tabContent">
-        <label><input type="checkbox" id="showFOV"> FOV表示</label>
-        <label><input type="checkbox" id="showLines"> 射線表示</label>
-        <button id="addEnemyBtn">敵を追加</button>
-        <button id="addAllyBtn">味方を追加</button>
-        <button id="deleteCharacterBtn" disabled>選択キャラクター削除</button>
-      </div>
-    </div>
-    </div>
-    </div>
     
     <!-- ✅ スマホ用十字ボタン（画面下に追加） -->
     <div id="mobileControls" class="mobile-only">

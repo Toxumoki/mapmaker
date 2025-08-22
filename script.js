@@ -247,12 +247,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ["addObstacleBtn","applyRotationBtn","clearObstaclesBtn","mirrorObstaclesBtn"]
       .forEach(id => { const b=document.getElementById(id); if(b) b.disabled=!isEditMode; });
 
-    // ✅ 射線管理モードではプレイヤー選択
-    if (!isEditMode) {
-      selectedCharacter = { type: "player" };
-    } else {
-      selectedCharacter = null;
-    }
 
     updateDeleteBtnUI();
     //updateMobileControlsUI(); // ✅ モバイルUI制御
@@ -399,11 +393,7 @@ function isPointInPolygon(pt, poly) {
 // ✅ 射線管理モードのとき、スマホ画面なら十字ボタン表示
 function updateMobileControlsUI() {
   const mc = document.getElementById("mobileControls");
-  if (window.innerWidth <= 768000000) {
     mc.style.display = "flex";
-  } else {
-    mc.style.display = "none";
-  }
 }
 
 

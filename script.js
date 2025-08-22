@@ -370,13 +370,13 @@ function drawObstacles() {
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let i = 0; i <= cols; i++) {
-    ctx.beginPath(); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#888";
     ctx.moveTo(i * cellSize, 0); ctx.lineTo(i * cellSize, canvas.height); ctx.stroke();
     if (i % 2 === 0 && i < cols) { ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText(i, i * cellSize + 2, 10); }
   }
   for (let j = 0; j <= rows; j++) {
-    ctx.beginPath(); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#888";
     ctx.moveTo(0, j * cellSize); ctx.lineTo(canvas.width, j * cellSize); ctx.stroke();
     if (j % 2 === 0 && j < rows) { ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText(j, 2, j * cellSize + 10); }

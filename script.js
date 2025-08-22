@@ -1,10 +1,9 @@
 // =============================
-// 視覚シミュレーター script.js
-// FOV（視野角）+ 射線遮断 + 編集モード付き
+// 障害物編集モード専用 script.js
+// グリッド + 障害物操作（追加/移動/回転/反転/削除/選択）
 // =============================
 
 // ---- キャンバス設定 ----
-// HTML上の<canvas>要素を取得し、描画用コンテキストを取得
 const canvas = document.getElementById("visionCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -14,68 +13,32 @@ const cols = 16;  // 横16セル
 const rows = 36;  // 縦36セル
 
 // キャンバスサイズをグリッドサイズに合わせる
-canvas.width = cols * cellSize;
-canvas.height = rows * cellSize;
-
-// ---- 追加: ドラッグ状態管理 ----
-let isDraggingCharacter = false;
-let draggedCharacter = null;
-
-
-// ---- プレイヤー設定 ----
-// プレイヤーの初期位置はキャンバス中央
-let playerX = canvas.width / 2;
-let playerY = canvas.height / 2;
-const playerSpeed = 2; // 移動速度（矢印キーで使用）
-
-// マウス位置（視線方向を制御）
-let mouseX = playerX;
-let mouseY = playerY;
-
-// プレイヤーが見ている方向を保存
-let playerView = { x: playerX, y: playerY };
-
-// ---- キャラクター管理 ----
-// 敵と味方の配列を用意
-const enemies = [];
-const allies = [];
-
-// 選択中のキャラクター（クリックで選択）
-let selectedCharacter = null;
-
-
-
+canvas.width = cols * cellSize;   // 320
+canvas.height = rows * cellSize;  // 720
 
 // ---- 障害物管理 ----
-// 編集モード中はtrue
-let isEditMode = true;
-
-// FOV（視野角）の角度
-const fovAngle = Math.PI / 3;
-
-// 障害物のリスト
 const obstacles = [];
 let selectedObstacleIndex = null;
 
 // 形状の表示名
-const shapeNames = { small_triangle: "小三角形", big_triangle: "大三角形", rhombus: "ひし形", trapezoid: "台形" };
+const shapeNames = {
+  small_triangle: "小三角形",
+  big_triangle: "大三角形",
+  rhombus: "ひし形",
+  trapezoid: "台形"
+};
 
 // 押されているキーの状態
 const keysPressed = {};
 
-// 射線・FOVの表示フラグ
-let showLines = false;
-let showFOV = false;
-
-// グリッド基準点(anchorIndex)に合わせて図形を配置
+// ---- グリッド基準点(anchorIndex)に合わせて図形を配置 ----
 function alignShapeToGrid(points, gx, gy, anchorIndex) {
   const ox = gx * cellSize - points[anchorIndex].x;
   const oy = gy * cellSize - points[anchorIndex].y;
   return points.map(p => ({ x: p.x + ox, y: p.y + oy }));
 }
 
-// 指定点(px,py)を(cx,cy)中心にangleDeg度回転
-// 障害物追加時の関数
+// ---- 回転ユーティリティ ----
 function rotatePoint(px, py, cx, cy, angleDeg) {
   const r = angleDeg * Math.PI / 180;
   const cos = Math.cos(r);
@@ -85,16 +48,12 @@ function rotatePoint(px, py, cx, cy, angleDeg) {
   return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
 }
 
-// 障害物全体を回転
-// 回転反映時の関数
 function rotateObstacle(shapes, deg, cx, cy) {
   return shapes.map(poly => poly.map(p => rotatePoint(p.x, p.y, cx, cy, deg)));
 }
 
 // ---- 各形状を生成する関数 ----
-// 三角形（小）
 function createTriangleAtGridPoint(x, y, ang = 0, anch = "topLeft") {
-  // 一片の長さと高さ
   const s = 2 * cellSize * 0.9, h = Math.sqrt(3) / 2 * s;
   let pts = [{ x: 0, y: 0 }, { x: -s / 2, y: h }, { x: s / 2, y: h }];
   let ai = anch === "bottomLeft" ? 1 : anch === "bottomRight" ? 2 : 0;
@@ -103,9 +62,7 @@ function createTriangleAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
 
-// 三角形（大）
 function createBigTriangleAtGridPoint(x, y, ang = 0, anch = "topLeft") {
-  // 一片の長さと高さ
   const s = 4 * cellSize * 0.9, h = Math.sqrt(3) / 2 * s;
   let pts = [{ x: 0, y: 0 }, { x: -s / 2, y: h }, { x: s / 2, y: h }];
   let ai = anch === "bottomLeft" ? 1 : anch === "bottomRight" ? 2 : 0;
@@ -114,9 +71,7 @@ function createBigTriangleAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
 
-// ひし形
 function createRhombusAtGridPoint(x, y, ang = 0, anch = "topLeft") {
-  // 一片の長さと一つの角
   const s = 2 * cellSize * 0.9, r = Math.PI / 3;
   let pts = [
     { x: 0, y: 0 },
@@ -130,10 +85,8 @@ function createRhombusAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
 
-// 台形
 function createTrapezoidAtGridPoint(x, y, ang = 0, anch = "topLeft") {
-  // 上底と下底と高さ
-  const tw = 2 * cellSize * 0.9, bw = 2 * tw, h = Math.sqrt(3)/2 * tw;
+  const tw = 2 * cellSize * 0.9, bw = 2 * tw, h = Math.sqrt(3) / 2 * tw;
   let pts = [
     { x: 0, y: 0 },
     { x: tw, y: 0 },
@@ -146,54 +99,11 @@ function createTrapezoidAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
 
-
 // ---- キー入力状態 ----
 document.addEventListener("keydown", e => keysPressed[e.key] = true);
 document.addEventListener("keyup", e => keysPressed[e.key] = false);
 
-// ---- クリック選択 ----
-// キャラ・障害物をクリックしたら選択
-canvas.addEventListener("mousedown", e => {
-  const r = canvas.getBoundingClientRect();
-  const x = e.clientX - r.left, y = e.clientY - r.top;
-
-  // ✅ キャラ選択と同時にドラッグ開始
-  if (enemies.some(en => Math.hypot(en.x - x, en.y - y) < en.radius && (selectedCharacter = en))) {
-    updateDeleteBtnUI();
-    isDraggingCharacter = true;
-    draggedCharacter = selectedCharacter;
-    return;
-  }
-  if (allies.some(al => Math.hypot(al.x - x, al.y - y) < al.radius && (selectedCharacter = al))) {
-    updateDeleteBtnUI();
-    isDraggingCharacter = true;
-    draggedCharacter = selectedCharacter;
-    return;
-  }
-  if (Math.hypot(playerX - x, playerY - y) < 8) {
-    selectedCharacter = { type: "player" };
-    updateDeleteBtnUI();
-    isDraggingCharacter = true;
-    draggedCharacter = selectedCharacter;
-    return;
-  }
-
-  // ✅ 障害物選択（既存処理そのまま）
-  if (isEditMode) {
-    for (let i = 0; i < obstacles.length; i++) {
-      for (const s of obstacles[i].shapes) {
-        if (isPointInPolygon({ x, y }, s)) { selectedObstacleIndex = i; updateSelectedUI(); return; }
-      }
-    }
-    selectedObstacleIndex = null; updateSelectedUI();
-  } else {
-    selectedCharacter = null;
-  }
-
-  updateDeleteBtnUI();
-});
-
-// ✅ モバイル用ボタン押下で疑似キー操作
+// ---- モバイル用ボタン押下で疑似キー操作 ----
 function bindMobileButton(buttonId, keyName) {
   const btn = document.getElementById(buttonId);
   btn.addEventListener("touchstart", e => {
@@ -205,61 +115,12 @@ function bindMobileButton(buttonId, keyName) {
     keysPressed[keyName] = false;
   });
 }
-
 bindMobileButton("btnUp", "ArrowUp");
 bindMobileButton("btnDown", "ArrowDown");
 bindMobileButton("btnLeft", "ArrowLeft");
 bindMobileButton("btnRight", "ArrowRight");
 
-
-
-// ---- タブ切替 ----
-// 編集モード/射線管理モードを切り替えるタブの挙動
-window.addEventListener("DOMContentLoaded", () => {
-  updateMobileControlsUI();
-  const tabs = document.querySelectorAll("#tabMenu .tab");
-  const contents = document.querySelectorAll(".tabContent");
-  tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
-      // すべてのタブからactiveを外し、クリックされたタブだけactive
-      tabs.forEach(t => t.classList.remove("active"));
-      tab.classList.add("active");
-
-      // コンテンツも切替
-      contents.forEach(c => c.classList.remove("active"));
-      document.getElementById(tab.dataset.target).classList.add("active");
-
-      // 編集モードかどうかを判定
-      isEditMode = (tab.dataset.target === "editPanel");
-
-      updateMobileControlsUI(); // ✅ 初回ロードでもUI制御
-
-      // 編集モードの時だけ編集ボタンを有効化
-      ["addObstacleBtn","applyRotationBtn","clearObstaclesBtn","mirrorObstaclesBtn"]
-        .forEach(id => { const b=document.getElementById(id); if(b) b.disabled=!isEditMode; });
-
-      if (!isEditMode) { selectedObstacleIndex = null; updateSelectedUI(); }
-    });
-
-    isEditMode = (tab.dataset.target === "editPanel");
-
-    // 編集ボタンの有効化
-    ["addObstacleBtn","applyRotationBtn","clearObstaclesBtn","mirrorObstaclesBtn"]
-      .forEach(id => { const b=document.getElementById(id); if(b) b.disabled=!isEditMode; });
-
-
-    updateDeleteBtnUI();
-    //updateMobileControlsUI(); // ✅ モバイルUI制御
-  });
-});
-
-// ---- UI更新 ----
-// キャラ削除ボタンの有効/無効を更新
-function updateDeleteBtnUI() {
-  document.getElementById("deleteCharacterBtn").disabled = !(selectedCharacter && (selectedCharacter.type === "enemy" || selectedCharacter.type === "ally"));
-}
-
-// 障害物一覧のUIを更新
+// ---- 障害物一覧UI更新 ----
 function updateObstacleList() {
   const l = document.getElementById("obstacleList");
   l.innerHTML = "";
@@ -273,7 +134,6 @@ function updateObstacleList() {
     li.addEventListener("click", () => { selectedObstacleIndex = i; updateSelectedUI(); });
     const b = document.createElement("button");
     b.textContent = "削除";
-    // 削除ボタンで障害物削除
     b.onclick = e => {
       e.stopPropagation();
       obstacles.splice(i, 1);
@@ -285,20 +145,25 @@ function updateObstacleList() {
   });
 }
 
-// 障害物選択UIラベルの更新
 function updateSelectedUI() {
   const l = document.getElementById("selectedLabel");
   const btn = document.getElementById("applyRotationBtn");
   if (selectedObstacleIndex !== null) {
     const cnt = {};
     let dn = "";
-    obstacles.forEach((o, i) => { cnt[o.type] = (cnt[o.type] || 0) + 1; if (i === selectedObstacleIndex) dn = `${shapeNames[o.type]} ${cnt[o.type]}`; });
+    obstacles.forEach((o, i) => {
+      cnt[o.type] = (cnt[o.type] || 0) + 1;
+      if (i === selectedObstacleIndex) dn = `${shapeNames[o.type]} ${cnt[o.type]}`;
+    });
     l.textContent = `選択中: ${dn}`;
     btn.disabled = false;
-  } else { l.textContent = "選択中: なし"; btn.disabled = true; }
+  } else {
+    l.textContent = "選択中: なし";
+    btn.disabled = true;
+  }
 }
+
 // ---- 障害物操作イベント ----
-// 障害物追加
 document.getElementById("addObstacleBtn").addEventListener("click", () => {
   const gx = parseInt(document.getElementById("cellX").value);
   const gy = parseInt(document.getElementById("cellY").value);
@@ -316,7 +181,7 @@ document.getElementById("addObstacleBtn").addEventListener("click", () => {
   updateObstacleList();
 });
 
-// 障害物全削除
+// 全削除
 document.getElementById("clearObstaclesBtn").addEventListener("click", () => {
   obstacles.length = 0;
   selectedObstacleIndex = null;
@@ -324,7 +189,7 @@ document.getElementById("clearObstaclesBtn").addEventListener("click", () => {
   updateSelectedUI();
 });
 
-// 選択障害物を回転
+// 選択回転
 document.getElementById("applyRotationBtn").addEventListener("click", () => {
   if (selectedObstacleIndex !== null) {
     const deg = parseFloat(document.getElementById("rotateAngleInput").value);
@@ -334,7 +199,7 @@ document.getElementById("applyRotationBtn").addEventListener("click", () => {
   }
 });
 
-// 全障害物を中心点を基準に反転コピー
+// 反転コピー
 document.getElementById("mirrorObstaclesBtn").addEventListener("click", () => {
   const c = { x: canvas.width / 2, y: canvas.height / 2 };
   const m = obstacles.map(o => ({
@@ -356,59 +221,146 @@ function drawObstacles() {
       for (let k = 1; k < s.length; k++) ctx.lineTo(s[k].x, s[k].y);
       ctx.closePath();
       ctx.fill();
-      if (i === selectedObstacleIndex) { ctx.strokeStyle = "yellow"; ctx.stroke(); }
+      if (i === selectedObstacleIndex) {
+        ctx.strokeStyle = "yellow";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
     });
   });
 }
-// ---- グリッド描画（番号付き）----
+
+// ---- グリッド描画 ----
 function drawGrid() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let i = 0; i <= cols; i++) {
-    ctx.beginPath(); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#888";
-    ctx.moveTo(i * cellSize, 0); ctx.lineTo(i * cellSize, canvas.height); ctx.stroke();
-    if (i % 2 === 0 && i < cols) { ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText(i, i * cellSize + 2, 10); }
+    ctx.moveTo(i * cellSize, 0);
+    ctx.lineTo(i * cellSize, canvas.height);
+    ctx.stroke();
+    if (i % 2 === 0 && i < cols) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "10px Arial";
+      ctx.fillText(i, i * cellSize + 2, 10);
+    }
   }
   for (let j = 0; j <= rows; j++) {
-    ctx.beginPath(); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#888";
-    ctx.moveTo(0, j * cellSize); ctx.lineTo(canvas.width, j * cellSize); ctx.stroke();
-    if (j % 2 === 0 && j < rows) { ctx.fillStyle = "#fff"; ctx.font = "10px Arial"; ctx.fillText(j, 2, j * cellSize + 10); }
+    ctx.moveTo(0, j * cellSize);
+    ctx.lineTo(canvas.width, j * cellSize);
+    ctx.stroke();
+    if (j % 2 === 0 && j < rows) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "10px Arial";
+      ctx.fillText(j, 2, j * cellSize + 10);
+    }
   }
 }
 
-
-// 点がポリゴン内か判定
+// ---- ポリゴン判定 ----
 function isPointInPolygon(pt, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const xi = poly[i].x, yi = poly[i].y;
     const xj = poly[j].x, yj = poly[j].y;
-    const intersect = ((yi > pt.y) !== (yj > pt.y)) && (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
 }
 
-// ✅ 射線管理モードのとき、スマホ画面なら十字ボタン表示
-function updateMobileControlsUI() {
-  const mc = document.getElementById("mobileControls");
-    mc.style.display = "flex";
+// ---- キャンバス座標変換（CSS拡縮対応） ----
+function getCanvasPoint(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  };
 }
 
+// ---- クリック/タップで障害物選択 ----
+function pickObstacleAt(x, y) {
+  // 前面優先：末尾（最後に追加されたもの）から走査
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const o = obstacles[i];
+    for (const s of o.shapes) {
+      if (isPointInPolygon({ x, y }, s)) {
+        selectedObstacleIndex = i;
+        updateSelectedUI();
+        return true;
+      }
+    }
+  }
+  // 何も当たらなければ選択解除
+  selectedObstacleIndex = null;
+  updateSelectedUI();
+  return false;
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  const p = getCanvasPoint(e.clientX, e.clientY);
+  pickObstacleAt(p.x, p.y);
+});
+
+canvas.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    const p = getCanvasPoint(t.clientX, t.clientY);
+    pickObstacleAt(p.x, p.y);
+  }
+}, { passive: true });
+
+// ---- モバイルコントロールUIは常に表示 ----
+document.getElementById("mobileControls").style.display = "flex";
+
+// ---- 二本指操作禁止（ピンチ検出） ----
+document.addEventListener("touchmove", function (e) {
+  if (e.touches.length > 1) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+document.addEventListener("gesturestart", e => e.preventDefault());
+
+let lastTouchEnd = 0;
+document.addEventListener("touchend", e => {
+  const now = new Date().getTime();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, false);
+
+document.addEventListener("touchmove", e => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+// ---- 安全なvw/vh計算（iOS Safari対策） ----
+function setViewportUnits() {
+  let vw = window.innerWidth * 0.01;
+  let vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty('--vw', `${vw}px`);
+  document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+setViewportUnits();
+window.addEventListener('resize', setViewportUnits);
+window.addEventListener('orientationchange', setViewportUnits);
 
 // ---- メインループ ----
-// 毎フレーム呼ばれる関数。描画と状態更新を行う
 function animate() {
-
-  // --- 障害物移動（編集モード時のみ）---
-  if (isEditMode && selectedObstacleIndex !== null) {
+  // --- 障害物移動（選択中のみ）---
+  if (selectedObstacleIndex !== null) {
     const o = obstacles[selectedObstacleIndex];
     let dx = 0, dy = 0;
-    if (keysPressed.ArrowUp) dy -= playerSpeed;
-    if (keysPressed.ArrowDown) dy += playerSpeed;
-    if (keysPressed.ArrowLeft) dx -= playerSpeed;
-    if (keysPressed.ArrowRight) dx += playerSpeed;
+    if (keysPressed.ArrowUp) dy -= 2;
+    if (keysPressed.ArrowDown) dy += 2;
+    if (keysPressed.ArrowLeft) dx -= 2;
+    if (keysPressed.ArrowRight) dx += 2;
     if (dx !== 0 || dy !== 0) {
       // 障害物の全頂点を移動
       o.shapes = o.shapes.map(shape => shape.map(p => ({ x: p.x + dx, y: p.y + dy })));
@@ -416,51 +368,11 @@ function animate() {
       o.anchorPoint.y += dy;
     }
   }
-// 二本指操作禁止（ピンチ検出）
-document.addEventListener('touchmove', function (e) {
-    if (e.touches.length > 1) {
-        e.preventDefault();
-    }
-}, { passive: false });
-
-// ===== ピンチズーム・スクロール防止 =====
-document.addEventListener('gesturestart', e => e.preventDefault());
-
-document.addEventListener('touchend', e => {
-    const now = new Date().getTime();
-    if (now - lastTouchEnd <= 300) e.preventDefault();
-    lastTouchEnd = now;
-}, false);
-
-document.addEventListener('touchmove', e => {
-    if (e.touches.length > 1) e.preventDefault();
-}, { passive: false });
-
-// ===== 安全なvw/vh計算（iOS Safariバグ対策）=====
-function setViewportUnits() {
-    let vw = window.innerWidth * 0.01;
-    let vh = window.innerHeight * 0.01;
-    document.documentElement.style.setProperty('--vw', `${vw}px`);
-    document.documentElement.style.setProperty('--vh', `${vh}px`);
-}
-
-// 初期化
-setViewportUnits();
-
-// 画面回転やリサイズ時も更新
-window.addEventListener('resize', setViewportUnits);
-window.addEventListener('orientationchange', setViewportUnits);
 
   // --- 描画処理 ---
-  drawGrid(); // グリッド描画
-
-  // 障害物を常に描画
+  drawGrid();
   drawObstacles();
 
-  // 次のフレームを要求
   requestAnimationFrame(animate);
 }
-
-// ---- ループ開始 ----
-// 最初の呼び出し → 無限に描画更新され続ける
 animate();

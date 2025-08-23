@@ -13,8 +13,8 @@ const cols = 16;  // 横16セル
 const rows = 36;  // 縦36セル
 
 // キャンバスサイズをグリッドサイズに合わせる
-canvas.width = cols * cellSize;   // 320
-canvas.height = rows * cellSize;  // 720
+canvas.width = cols * cellSize;
+canvas.height = rows * cellSize;
 
 // ---- 障害物管理 ----
 const obstacles = [];
@@ -27,9 +27,6 @@ const shapeNames = {
   rhombus: "ひし形",
   trapezoid: "台形"
 };
-
-// 押されているキーの状態
-const keysPressed = {};
 
 // ---- グリッド基準点(anchorIndex)に合わせて図形を配置 ----
 function alignShapeToGrid(points, gx, gy, anchorIndex) {
@@ -98,27 +95,6 @@ function createTrapezoidAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   const cx = pts[ai].x, cy = pts[ai].y;
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
-
-// ---- キー入力状態 ----
-document.addEventListener("keydown", e => keysPressed[e.key] = true);
-document.addEventListener("keyup", e => keysPressed[e.key] = false);
-
-// ---- モバイル用ボタン押下で疑似キー操作 ----
-function bindMobileButton(buttonId, keyName) {
-  const btn = document.getElementById(buttonId);
-  btn.addEventListener("touchstart", e => {
-    e.preventDefault();
-    keysPressed[keyName] = true;
-  });
-  btn.addEventListener("touchend", e => {
-    e.preventDefault();
-    keysPressed[keyName] = false;
-  });
-}
-bindMobileButton("btnUp", "ArrowUp");
-bindMobileButton("btnDown", "ArrowDown");
-bindMobileButton("btnLeft", "ArrowLeft");
-bindMobileButton("btnRight", "ArrowRight");
 
 // ---- 障害物一覧UI更新 ----
 function updateObstacleList() {
@@ -211,6 +187,58 @@ document.getElementById("mirrorObstaclesBtn").addEventListener("click", () => {
   updateObstacleList();
 });
 
+// ---- 移動可否チェック ----
+function canMoveObstacle(obstacle, dx, dy) {
+  // 全頂点を仮移動してチェック
+  for (const shape of obstacle.shapes) {
+    for (const p of shape) {
+      const nx = p.x + dx;
+      const ny = p.y + dy;
+      if (nx < 0 || nx > canvas.width || ny < 0 || ny > canvas.height) {
+        return false; // 範囲外 → 移動不可
+      }
+    }
+  }
+  return true; // 全頂点OKなら移動可能
+}
+
+// ---- 選択中障害物を移動（1マス分 / グリッド外制限付き） ----
+function moveSelectedObstacle(key) {
+  if (selectedObstacleIndex === null) return;
+  const o = obstacles[selectedObstacleIndex];
+  let dx = 0, dy = 0;
+
+  if (key === "ArrowUp") dy -= cellSize;
+  if (key === "ArrowDown") dy += cellSize;
+  if (key === "ArrowLeft") dx -= cellSize;
+  if (key === "ArrowRight") dx += cellSize;
+
+  if ((dx !== 0 || dy !== 0) && canMoveObstacle(o, dx, dy)) {
+    // 実際に移動
+    o.shapes = o.shapes.map(shape => shape.map(p => ({ x: p.x + dx, y: p.y + dy })));
+    o.anchorPoint.x += dx;
+    o.anchorPoint.y += dy;
+  }
+}
+
+// ---- キーボード操作 ----
+document.addEventListener("keydown", e => {
+  moveSelectedObstacle(e.key); // 押すたびに1マス動く
+});
+
+// ---- モバイル十字ボタン操作 ----
+function bindMobileButton(buttonId, keyName) {
+  const btn = document.getElementById(buttonId);
+  btn.addEventListener("touchstart", e => {
+    e.preventDefault();
+    moveSelectedObstacle(keyName); // タップ時に1マス動く
+  });
+}
+bindMobileButton("btnUp", "ArrowUp");
+bindMobileButton("btnDown", "ArrowDown");
+bindMobileButton("btnLeft", "ArrowLeft");
+bindMobileButton("btnRight", "ArrowRight");
+
 // ---- 障害物描画 ----
 function drawObstacles() {
   obstacles.forEach((o, i) => {
@@ -261,19 +289,6 @@ function drawGrid() {
   }
 }
 
-// ---- ポリゴン判定 ----
-function isPointInPolygon(pt, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i].x, yi = poly[i].y;
-    const xj = poly[j].x, yj = poly[j].y;
-    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
-      (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
 // ---- キャンバス座標変換（CSS拡縮対応） ----
 function getCanvasPoint(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
@@ -287,7 +302,6 @@ function getCanvasPoint(clientX, clientY) {
 
 // ---- クリック/タップで障害物選択 ----
 function pickObstacleAt(x, y) {
-  // 前面優先：末尾（最後に追加されたもの）から走査
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const o = obstacles[i];
     for (const s of o.shapes) {
@@ -298,17 +312,14 @@ function pickObstacleAt(x, y) {
       }
     }
   }
-  // 何も当たらなければ選択解除
   selectedObstacleIndex = null;
   updateSelectedUI();
   return false;
 }
-
 canvas.addEventListener("mousedown", (e) => {
   const p = getCanvasPoint(e.clientX, e.clientY);
   pickObstacleAt(p.x, p.y);
 });
-
 canvas.addEventListener("touchstart", (e) => {
   if (e.touches.length === 1) {
     const t = e.touches[0];
@@ -316,6 +327,19 @@ canvas.addEventListener("touchstart", (e) => {
     pickObstacleAt(p.x, p.y);
   }
 }, { passive: true });
+
+// ---- ポリゴン判定 ----
+function isPointInPolygon(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
 // ---- モバイルコントロールUIは常に表示 ----
 document.getElementById("mobileControls").style.display = "flex";
@@ -326,7 +350,6 @@ document.addEventListener("touchmove", function (e) {
     e.preventDefault();
   }
 }, { passive: false });
-
 document.addEventListener("gesturestart", e => e.preventDefault());
 
 let lastTouchEnd = 0;
@@ -335,10 +358,6 @@ document.addEventListener("touchend", e => {
   if (now - lastTouchEnd <= 300) e.preventDefault();
   lastTouchEnd = now;
 }, false);
-
-document.addEventListener("touchmove", e => {
-  if (e.touches.length > 1) e.preventDefault();
-}, { passive: false });
 
 // ---- 安全なvw/vh計算（iOS Safari対策） ----
 function setViewportUnits() {
@@ -351,28 +370,113 @@ setViewportUnits();
 window.addEventListener('resize', setViewportUnits);
 window.addEventListener('orientationchange', setViewportUnits);
 
-// ---- メインループ ----
-function animate() {
-  // --- 障害物移動（選択中のみ）---
-  if (selectedObstacleIndex !== null) {
-    const o = obstacles[selectedObstacleIndex];
-    let dx = 0, dy = 0;
-    if (keysPressed.ArrowUp) dy -= 2;
-    if (keysPressed.ArrowDown) dy += 2;
-    if (keysPressed.ArrowLeft) dx -= 2;
-    if (keysPressed.ArrowRight) dx += 2;
-    if (dx !== 0 || dy !== 0) {
-      // 障害物の全頂点を移動
-      o.shapes = o.shapes.map(shape => shape.map(p => ({ x: p.x + dx, y: p.y + dy })));
-      o.anchorPoint.x += dx;
-      o.anchorPoint.y += dy;
-    }
+
+/*
+// ---- マップ保存処理（JPEG固定） ----
+document.getElementById("downloadMapBtn").addEventListener("click", () => {
+  // キャンバスをJPEG画像に変換
+  const dataURL = canvas.toDataURL("image/jpeg");
+
+  // ファイル名を日時付きで生成
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}${String(now.getSeconds()).padStart(2,"0")}`;
+  const filename = `map_${timestamp}.jpg`;
+
+  // ダウンロード処理
+  const link = document.createElement("a");
+  link.href = dataURL;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
+*/
+
+
+// ---- JSON保存処理 ----
+document.getElementById("saveJsonBtn").addEventListener("click", () => {
+  const mapName = document.getElementById("mapNameInput").value.trim();
+  if (!mapName) {
+    alert("マップ名を入力してください");
+    return;
   }
 
-  // --- 描画処理 ---
+  // 保存するデータ
+  const mapData = {
+    mapName: mapName,
+    createdAt: new Date().toISOString(),
+    obstacles: obstacles
+  };
+
+  // JSON化（整形付き）
+  const jsonData = JSON.stringify(mapData, null, 2);
+
+  // Blob生成
+  const blob = new Blob([jsonData], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  // ダウンロード処理
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${mapName}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // メモリ解放
+  URL.revokeObjectURL(url);
+});
+
+// ---- JSON読み込み処理 ----
+document.getElementById("loadJsonBtn").addEventListener("click", () => {
+  // 隠しファイル入力をクリック
+  document.getElementById("loadJsonInput").click();
+});
+
+document.getElementById("loadJsonInput").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const mapData = JSON.parse(e.target.result);
+
+      // マップ名をUIに反映
+      if (mapData.mapName) {
+        document.getElementById("mapNameInput").value = mapData.mapName;
+      }
+
+      // 既存マップをクリアして上書き
+      if (Array.isArray(mapData.obstacles)) {
+        obstacles = []; // クリア
+        obstacles = mapData.obstacles; // 上書き
+      } else {
+        alert("不正なJSONフォーマットです: obstacles が見つかりません");
+        return;
+      }
+
+      // サイドバー更新
+      refreshObstacleList();
+    } catch (err) {
+      alert("JSONの読み込みに失敗しました: " + err.message);
+    }
+  };
+
+  reader.readAsText(file);
+});
+
+
+
+
+
+
+
+
+// ---- メインループ ----
+function animate() {
   drawGrid();
   drawObstacles();
-
   requestAnimationFrame(animate);
 }
 animate();

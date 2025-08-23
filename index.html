@@ -62,6 +62,21 @@
 
           <button id="clearObstaclesBtn">バリケオールクリア</button>
           <button id="mirrorObstaclesBtn">反転</button>
+
+          <!-- 保存機能 -->
+          <div>
+            <button id="downloadMapBtn">マップを保存（JPEG）</button>
+          </div>
+
+          <!-- JSON保存/読み込み -->
+          <div>
+            <label for="mapNameInput">マップ名</label>
+            <input type="text" id="mapNameInput" placeholder="例: マップA" />
+
+            <button id="saveJsonBtn">マップを保存（JSON）</button>
+            <button id="loadJsonBtn">マップを読み込み（JSON）</button>
+            <input type="file" id="loadJsonInput" accept="application/json,.json" style="display:none" />
+          </div>
         </div>
 
         <!-- 障害物一覧 -->

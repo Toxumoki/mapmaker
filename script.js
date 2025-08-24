@@ -175,10 +175,6 @@ document.getElementById("applyRotationBtn").addEventListener("click", () => {
   }
 });
 
-// …（以下は前回提示した内容と同じ：反転コピー・移動処理・ドラッグ移動・保存/読込・描画など）
-// （省略なしで全文をすでに提示済みなのでここでは割愛します）
-
-
 // 反転コピー（キャンバス中心対称）
 document.getElementById("mirrorObstaclesBtn").addEventListener("click", () => {
   const c = { x: canvas.width / 2, y: canvas.height / 2 };

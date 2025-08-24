@@ -1,6 +1,6 @@
 // =============================
 // 障害物編集モード専用 script.js
-// グリッド + 障害物操作（追加/移動/回転/反転/削除/選択）
+// グリッド + 障害物操作（追加/移動/回転/反転/削除/選択/ドラッグ移動）
 // =============================
 
 // ---- キャンバス設定 ----
@@ -106,7 +106,6 @@ function updateObstacleList() {
     cnt[o.type] = (cnt[o.type] || 0) + 1;
     const li = document.createElement("li");
     li.textContent = `${tn} ${cnt[o.type]}`;
-    // クリックで障害物を選択
     li.addEventListener("click", () => { selectedObstacleIndex = i; updateSelectedUI(); });
     const b = document.createElement("button");
     b.textContent = "削除";
@@ -143,29 +142,30 @@ function updateSelectedUI() {
 document.getElementById("addObstacleBtn").addEventListener("click", () => {
   const gx = parseInt(document.getElementById("cellX").value);
   const gy = parseInt(document.getElementById("cellY").value);
-  const ang = parseFloat(document.getElementById("triangleAngle").value);
   const st = document.getElementById("shapeType").value;
   const anchor = document.getElementById("vertexAnchor").value;
 
   let shape;
-  if (st === "small_triangle") shape = createTriangleAtGridPoint(gx, gy, ang, anchor);
-  else if (st === "big_triangle") shape = createBigTriangleAtGridPoint(gx, gy, ang, anchor);
-  else if (st === "rhombus") shape = createRhombusAtGridPoint(gx, gy, ang, anchor);
-  else if (st === "trapezoid") shape = createTrapezoidAtGridPoint(gx, gy, ang, anchor);
+  if (st === "small_triangle") shape = createTriangleAtGridPoint(gx, gy, 0, anchor);
+  else if (st === "big_triangle") shape = createBigTriangleAtGridPoint(gx, gy, 0, anchor);
+  else if (st === "rhombus") shape = createRhombusAtGridPoint(gx, gy, 0, anchor);
+  else if (st === "trapezoid") shape = createTrapezoidAtGridPoint(gx, gy, 0, anchor);
 
   obstacles.push({ type: st, shapes: [shape], anchorPoint: { x: gx * cellSize, y: gy * cellSize } });
   updateObstacleList();
 });
 
-// 全削除
+// 🚩 全削除（確認ポップアップ付き）
 document.getElementById("clearObstaclesBtn").addEventListener("click", () => {
-  obstacles.length = 0;
-  selectedObstacleIndex = null;
-  updateObstacleList();
-  updateSelectedUI();
+  if (confirm("本当にすべての障害物を削除しますか？")) {
+    obstacles.length = 0;
+    selectedObstacleIndex = null;
+    updateObstacleList();
+    updateSelectedUI();
+  }
 });
 
-// 選択回転
+// 選択回転（基準点は常に anchorPoint）
 document.getElementById("applyRotationBtn").addEventListener("click", () => {
   if (selectedObstacleIndex !== null) {
     const deg = parseFloat(document.getElementById("rotateAngleInput").value);
@@ -175,7 +175,11 @@ document.getElementById("applyRotationBtn").addEventListener("click", () => {
   }
 });
 
-// 反転コピー
+// …（以下は前回提示した内容と同じ：反転コピー・移動処理・ドラッグ移動・保存/読込・描画など）
+// （省略なしで全文をすでに提示済みなのでここでは割愛します）
+
+
+// 反転コピー（キャンバス中心対称）
 document.getElementById("mirrorObstaclesBtn").addEventListener("click", () => {
   const c = { x: canvas.width / 2, y: canvas.height / 2 };
   const m = obstacles.map(o => ({
@@ -202,7 +206,7 @@ function canMoveObstacle(obstacle, dx, dy) {
   return true; // 全頂点OKなら移動可能
 }
 
-// ---- 選択中障害物を移動（1マス分 / グリッド外制限付き） ----
+// ---- 選択中障害物を移動（矢印キー/十字ボタン用） ----
 function moveSelectedObstacle(key) {
   if (selectedObstacleIndex === null) return;
   const o = obstacles[selectedObstacleIndex];
@@ -239,56 +243,6 @@ bindMobileButton("btnDown", "ArrowDown");
 bindMobileButton("btnLeft", "ArrowLeft");
 bindMobileButton("btnRight", "ArrowRight");
 
-// ---- 障害物描画 ----
-function drawObstacles() {
-  obstacles.forEach((o, i) => {
-    ctx.fillStyle = "#006affff"; // 水色
-    o.shapes.forEach(s => {
-      ctx.beginPath();
-      ctx.moveTo(s[0].x, s[0].y);
-      for (let k = 1; k < s.length; k++) ctx.lineTo(s[k].x, s[k].y);
-      ctx.closePath();
-      ctx.fill();
-      if (i === selectedObstacleIndex) {
-        ctx.strokeStyle = "yellow";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-    });
-  });
-}
-
-// ---- グリッド描画 ----
-function drawGrid() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (let i = 0; i <= cols; i++) {
-    ctx.beginPath();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#888";
-    ctx.moveTo(i * cellSize, 0);
-    ctx.lineTo(i * cellSize, canvas.height);
-    ctx.stroke();
-    if (i % 2 === 0 && i < cols) {
-      ctx.fillStyle = "#fff";
-      ctx.font = "10px Arial";
-      ctx.fillText(i, i * cellSize + 2, 10);
-    }
-  }
-  for (let j = 0; j <= rows; j++) {
-    ctx.beginPath();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#888";
-    ctx.moveTo(0, j * cellSize);
-    ctx.lineTo(canvas.width, j * cellSize);
-    ctx.stroke();
-    if (j % 2 === 0 && j < rows) {
-      ctx.fillStyle = "#fff";
-      ctx.font = "10px Arial";
-      ctx.fillText(j, 2, j * cellSize + 10);
-    }
-  }
-}
-
 // ---- キャンバス座標変換（CSS拡縮対応） ----
 function getCanvasPoint(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
@@ -298,6 +252,19 @@ function getCanvasPoint(clientX, clientY) {
     x: (clientX - rect.left) * scaleX,
     y: (clientY - rect.top) * scaleY
   };
+}
+
+// ---- ポリゴン判定 ----
+function isPointInPolygon(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
 
 // ---- クリック/タップで障害物選択 ----
@@ -316,29 +283,181 @@ function pickObstacleAt(x, y) {
   updateSelectedUI();
   return false;
 }
+
+function isPointOnSelectedObstacle(pt) {
+  if (selectedObstacleIndex === null) return false;
+  const o = obstacles[selectedObstacleIndex];
+  return o.shapes.some(s => isPointInPolygon(pt, s));
+}
+
+// ---- ドラッグ移動（選択中のみ） ----
+let isDragging = false;
+let lastDragX = 0;
+let lastDragY = 0;
+let accumDX = 0; // 未処理のドラッグ移動量（X）
+let accumDY = 0; // 未処理のドラッグ移動量（Y）
+
+// mousedown：選択/ドラッグ開始判定を一括で処理
 canvas.addEventListener("mousedown", (e) => {
   const p = getCanvasPoint(e.clientX, e.clientY);
+
+  // まず、選択状態の上かどうかでドラッグ開始判定
+  if (selectedObstacleIndex !== null && isPointOnSelectedObstacle(p)) {
+    isDragging = true;
+    lastDragX = p.x;
+    lastDragY = p.y;
+    accumDX = 0;
+    accumDY = 0;
+    return;
+  }
+
+  // そうでなければ選択処理のみ（このクリックではドラッグ開始しない）
   pickObstacleAt(p.x, p.y);
 });
+
+canvas.addEventListener("mousemove", (e) => {
+  if (!isDragging || selectedObstacleIndex === null) return;
+  const p = getCanvasPoint(e.clientX, e.clientY);
+
+  // 前フレームからの移動量を加算
+  accumDX += (p.x - lastDragX);
+  accumDY += (p.y - lastDragY);
+  lastDragX = p.x;
+  lastDragY = p.y;
+
+  // X方向のしきい値処理（1マス単位で複数ステップ分も処理）
+  while (accumDX >= cellSize || accumDX <= -cellSize) {
+    const step = accumDX >= cellSize ? cellSize : -cellSize;
+    tryMoveSelected(step, 0);
+    accumDX -= step; // 成否に関わらずしきい値分だけ減算（引っかかったら次の動き待ち）
+  }
+
+  // Y方向のしきい値処理
+  while (accumDY >= cellSize || accumDY <= -cellSize) {
+    const step = accumDY >= cellSize ? cellSize : -cellSize;
+    tryMoveSelected(0, step);
+    accumDY -= step;
+  }
+});
+
+function tryMoveSelected(dx, dy) {
+  const o = obstacles[selectedObstacleIndex];
+  if (canMoveObstacle(o, dx, dy)) {
+    o.shapes = o.shapes.map(shape => shape.map(p => ({ x: p.x + dx, y: p.y + dy })));
+    o.anchorPoint.x += dx;
+    o.anchorPoint.y += dy;
+  }
+}
+
+function endDrag() {
+  isDragging = false;
+  accumDX = 0;
+  accumDY = 0;
+}
+
+canvas.addEventListener("mouseup", endDrag);
+canvas.addEventListener("mouseleave", endDrag);
+
+// ---- タッチ操作（スマホ用） ----
 canvas.addEventListener("touchstart", (e) => {
-  if (e.touches.length === 1) {
-    const t = e.touches[0];
-    const p = getCanvasPoint(t.clientX, t.clientY);
+  if (e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const p = getCanvasPoint(t.clientX, t.clientY);
+
+  // 選択済みの上でのみドラッグ開始
+  if (selectedObstacleIndex !== null && isPointOnSelectedObstacle(p)) {
+    isDragging = true;
+    lastDragX = p.x;
+    lastDragY = p.y;
+    accumDX = 0;
+    accumDY = 0;
+  } else {
+    // タップで選択（このタップではドラッグ開始しない）
     pickObstacleAt(p.x, p.y);
   }
 }, { passive: true });
 
-// ---- ポリゴン判定 ----
-function isPointInPolygon(pt, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i].x, yi = poly[i].y;
-    const xj = poly[j].x, yj = poly[j].y;
-    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
-      (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
+canvas.addEventListener("touchmove", (e) => {
+  if (!isDragging || selectedObstacleIndex === null) return;
+  if (e.touches.length !== 1) return;
+  // ドラッグ中はスクロールを抑止（iOS対策）
+  e.preventDefault();
+
+  const t = e.touches[0];
+  const p = getCanvasPoint(t.clientX, t.clientY);
+
+  accumDX += (p.x - lastDragX);
+  accumDY += (p.y - lastDragY);
+  lastDragX = p.x;
+  lastDragY = p.y;
+
+  while (accumDX >= cellSize || accumDX <= -cellSize) {
+    const step = accumDX >= cellSize ? cellSize : -cellSize;
+    tryMoveSelected(step, 0);
+    accumDX -= step;
   }
-  return inside;
+  while (accumDY >= cellSize || accumDY <= -cellSize) {
+    const step = accumDY >= cellSize ? cellSize : -cellSize;
+    tryMoveSelected(0, step);
+    accumDY -= step;
+  }
+}, { passive: false }); // preventDefaultを使うため passive:false
+
+canvas.addEventListener("touchend", endDrag, { passive: true });
+canvas.addEventListener("touchcancel", endDrag, { passive: true });
+
+// ---- 障害物描画 ----
+function drawObstacles() {
+  obstacles.forEach((o, i) => {
+    ctx.fillStyle = "#006affff"; // 水色（#RRGGBBAA）
+    o.shapes.forEach(s => {
+      ctx.beginPath();
+      ctx.moveTo(s[0].x, s[0].y);
+      for (let k = 1; k < s.length; k++) ctx.lineTo(s[k].x, s[k].y);
+      ctx.closePath();
+      ctx.fill();
+      if (i === selectedObstacleIndex) {
+        ctx.strokeStyle = "yellow";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    });
+  });
+}
+
+// ---- グリッド描画 ----
+function drawGrid() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 縦線 + X座標ラベル
+  for (let i = 0; i <= cols; i++) {
+    ctx.beginPath();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#888";
+    ctx.moveTo(i * cellSize, 0);
+    ctx.lineTo(i * cellSize, canvas.height);
+    ctx.stroke();
+    if (i % 2 === 0 && i < cols) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "10px Arial";
+      ctx.fillText(i, i * cellSize + 2, 10);
+    }
+  }
+
+  // 横線 + Y座標ラベル
+  for (let j = 0; j <= rows; j++) {
+    ctx.beginPath();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#888";
+    ctx.moveTo(0, j * cellSize);
+    ctx.lineTo(canvas.width, j * cellSize);
+    ctx.stroke();
+    if (j % 2 === 0 && j < rows) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "10px Arial";
+      ctx.fillText(j, 2, j * cellSize + 10);
+    }
+  }
 }
 
 // ---- モバイルコントロールUIは常に表示 ----
@@ -370,9 +489,7 @@ setViewportUnits();
 window.addEventListener('resize', setViewportUnits);
 window.addEventListener('orientationchange', setViewportUnits);
 
-
-/*
-// ---- マップ保存処理（JPEG固定） ----
+// ---- マップ保存処理（JPEG有効化） ----
 document.getElementById("downloadMapBtn").addEventListener("click", () => {
   // キャンバスをJPEG画像に変換
   const dataURL = canvas.toDataURL("image/jpeg");
@@ -390,8 +507,6 @@ document.getElementById("downloadMapBtn").addEventListener("click", () => {
   link.click();
   document.body.removeChild(link);
 });
-*/
-
 
 // ---- JSON保存処理 ----
 document.getElementById("saveJsonBtn").addEventListener("click", () => {
@@ -447,17 +562,19 @@ document.getElementById("loadJsonInput").addEventListener("change", (event) => {
         document.getElementById("mapNameInput").value = mapData.mapName;
       }
 
-      // 既存マップをクリアして上書き
+      // 既存マップをクリアして上書き（const 再代入禁止に配慮）
       if (Array.isArray(mapData.obstacles)) {
-        obstacles = []; // クリア
-        obstacles = mapData.obstacles; // 上書き
+        obstacles.length = 0;                 // クリア
+        obstacles.push(...mapData.obstacles); // 上書き
       } else {
         alert("不正なJSONフォーマットです: obstacles が見つかりません");
         return;
       }
 
-      // サイドバー更新
-      refreshObstacleList();
+      // 選択解除 & UI更新
+      selectedObstacleIndex = null;
+      updateObstacleList();
+      updateSelectedUI();
     } catch (err) {
       alert("JSONの読み込みに失敗しました: " + err.message);
     }
@@ -465,13 +582,6 @@ document.getElementById("loadJsonInput").addEventListener("change", (event) => {
 
   reader.readAsText(file);
 });
-
-
-
-
-
-
-
 
 // ---- メインループ ----
 function animate() {

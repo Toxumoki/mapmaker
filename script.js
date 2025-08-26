@@ -17,6 +17,7 @@ canvas.width = cols * cellSize;
 canvas.height = rows * cellSize;
 
 // ---- 障害物管理 ----
+// 仕様変更：obstacle = { type, shapes, anchorPoint:{x,y}, rotationAngle:number, anchor:string }
 const obstacles = [];
 let selectedObstacleIndex = null;
 
@@ -96,6 +97,15 @@ function createTrapezoidAtGridPoint(x, y, ang = 0, anch = "topLeft") {
   return pts.map(p => rotatePoint(p.x, p.y, cx, cy, ang));
 }
 
+// ---- 形状の再生成ヘルパー（type/anchorPoint/rotationAngle/anchor から shapes を作る）----
+function regenerateShape(type, gx, gy, ang, anchor) {
+  if (type === "small_triangle") return createTriangleAtGridPoint(gx, gy, ang, anchor);
+  if (type === "big_triangle")    return createBigTriangleAtGridPoint(gx, gy, ang, anchor);
+  if (type === "rhombus")         return createRhombusAtGridPoint(gx, gy, ang, anchor);
+  if (type === "trapezoid")       return createTrapezoidAtGridPoint(gx, gy, ang, anchor);
+  return [];
+}
+
 // ---- 障害物一覧UI更新 ----
 function updateObstacleList() {
   const l = document.getElementById("obstacleList");
@@ -145,13 +155,17 @@ document.getElementById("addObstacleBtn").addEventListener("click", () => {
   const st = document.getElementById("shapeType").value;
   const anchor = document.getElementById("vertexAnchor").value;
 
-  let shape;
-  if (st === "small_triangle") shape = createTriangleAtGridPoint(gx, gy, 0, anchor);
-  else if (st === "big_triangle") shape = createBigTriangleAtGridPoint(gx, gy, 0, anchor);
-  else if (st === "rhombus") shape = createRhombusAtGridPoint(gx, gy, 0, anchor);
-  else if (st === "trapezoid") shape = createTrapezoidAtGridPoint(gx, gy, 0, anchor);
+  // 生成角は初期0
+  const rotationAngle = 0;
+  const shape = regenerateShape(st, gx, gy, rotationAngle, anchor);
 
-  obstacles.push({ type: st, shapes: [shape], anchorPoint: { x: gx * cellSize, y: gy * cellSize } });
+  obstacles.push({
+    type: st,
+    shapes: [shape],
+    anchorPoint: { x: gx * cellSize, y: gy * cellSize },
+    rotationAngle: rotationAngle,
+    anchor: anchor
+  });
   updateObstacleList();
 });
 
@@ -169,19 +183,34 @@ document.getElementById("clearObstaclesBtn").addEventListener("click", () => {
 document.getElementById("applyRotationBtn").addEventListener("click", () => {
   if (selectedObstacleIndex !== null) {
     const deg = parseFloat(document.getElementById("rotateAngleInput").value);
-    const a = obstacles[selectedObstacleIndex].anchorPoint;
-    obstacles[selectedObstacleIndex].shapes = rotateObstacle(obstacles[selectedObstacleIndex].shapes, deg, a.x, a.y);
+    const o = obstacles[selectedObstacleIndex];
+    const a = o.anchorPoint;
+    // 見た目の形を回転
+    o.shapes = rotateObstacle(o.shapes, deg, a.x, a.y);
+    // 角度を内部状態としても保持（保存→再生成で再現できるように）
+    o.rotationAngle = normalizeAngle(o.rotationAngle + deg);
     updateObstacleList();
   }
 });
 
+// 角度正規化（-360..360 を 0..360 に）
+function normalizeAngle(a) {
+  let r = a % 360;
+  if (r < 0) r += 360;
+  return r;
+}
+
 // 反転コピー（キャンバス中心対称）
+// 中心対称は「中心回り180°回転」と等価。
+// 保存→再読込で形状一致させるため、コピー側の rotationAngle を +180 しておく。
 document.getElementById("mirrorObstaclesBtn").addEventListener("click", () => {
   const c = { x: canvas.width / 2, y: canvas.height / 2 };
   const m = obstacles.map(o => ({
     type: o.type,
     shapes: o.shapes.map(s => s.map(p => ({ x: 2 * c.x - p.x, y: 2 * c.y - p.y }))),
-    anchorPoint: { x: 2 * c.x - o.anchorPoint.x, y: 2 * c.y - o.anchorPoint.y }
+    anchorPoint: { x: 2 * c.x - o.anchorPoint.x, y: 2 * c.y - o.anchorPoint.y },
+    rotationAngle: normalizeAngle((o.rotationAngle || 0) + 180),
+    anchor: o.anchor
   }));
   obstacles.push(...m);
   updateObstacleList();
@@ -504,7 +533,7 @@ document.getElementById("downloadMapBtn").addEventListener("click", () => {
   document.body.removeChild(link);
 });
 
-// ---- JSON保存処理 ----
+// ---- JSON保存処理（仕様変更：最小情報のみ保存） ----
 document.getElementById("saveJsonBtn").addEventListener("click", () => {
   const mapName = document.getElementById("mapNameInput").value.trim();
   if (!mapName) {
@@ -512,11 +541,16 @@ document.getElementById("saveJsonBtn").addEventListener("click", () => {
     return;
   }
 
-  // 保存するデータ
+  // 保存するデータ：type / anchorPoint / rotationAngle / anchor のみ
   const mapData = {
     mapName: mapName,
     createdAt: new Date().toISOString(),
-    obstacles: obstacles
+    obstacles: obstacles.map(o => ({
+      type: o.type,
+      anchorPoint: { x: o.anchorPoint.x, y: o.anchorPoint.y },
+      rotationAngle: o.rotationAngle || 0,
+      anchor: o.anchor || "topLeft"
+    }))
   };
 
   // JSON化（整形付き）
@@ -538,7 +572,7 @@ document.getElementById("saveJsonBtn").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-// ---- JSON読み込み処理 ----
+// ---- JSON読み込み処理（仕様変更：再生成） ----
 document.getElementById("loadJsonBtn").addEventListener("click", () => {
   // 隠しファイル入力をクリック
   document.getElementById("loadJsonInput").click();
@@ -558,10 +592,29 @@ document.getElementById("loadJsonInput").addEventListener("change", (event) => {
         document.getElementById("mapNameInput").value = mapData.mapName;
       }
 
-      // 既存マップをクリアして上書き（const 再代入禁止に配慮）
+      // 既存マップをクリアして上書き
       if (Array.isArray(mapData.obstacles)) {
-        obstacles.length = 0;                 // クリア
-        obstacles.push(...mapData.obstacles); // 上書き
+        obstacles.length = 0; // クリア
+
+        mapData.obstacles.forEach(o => {
+          // 後方互換：旧データ（shapesのみ）などは破棄し、最低限 type + anchorPoint が必要
+          if (o && o.type && o.anchorPoint && typeof o.anchorPoint.x === "number" && typeof o.anchorPoint.y === "number") {
+            const ang = normalizeAngle(o.rotationAngle || 0);
+            const anchor = o.anchor || "topLeft";
+            // anchorPoint をセル座標に換算（基本的に20の倍数のはず）
+            const gx = Math.round(o.anchorPoint.x / cellSize);
+            const gy = Math.round(o.anchorPoint.y / cellSize);
+            const shape = regenerateShape(o.type, gx, gy, ang, anchor);
+
+            obstacles.push({
+              type: o.type,
+              shapes: [shape],
+              anchorPoint: { x: gx * cellSize, y: gy * cellSize }, // 正規化して再設定
+              rotationAngle: ang,
+              anchor: anchor
+            });
+          }
+        });
       } else {
         alert("不正なJSONフォーマットです: obstacles が見つかりません");
         return;

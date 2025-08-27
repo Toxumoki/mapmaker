@@ -8,7 +8,7 @@ const canvas = document.getElementById("visionCanvas");
 const ctx = canvas.getContext("2d");
 
 // 1マスの大きさ（セルサイズ）とマップの行列数
-const cellSize = 20;
+const cellSize = 25;
 const cols = 16;  // 横16セル
 const rows = 36;  // 縦36セル
 

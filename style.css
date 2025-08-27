@@ -5,14 +5,14 @@ body {
   color: #fff;
   font-family: Arial, sans-serif;
   display: flex;
-  flex-direction: row;  /* ✅ キャンバスと右パネルを横並び */
+  flex-direction: row;  /* PCデフォルト: 横並び */
   height: 100vh;
   overflow: hidden;
 }
 
 /* === キャンバス === */
 #visionCanvas {
-  flex: 1;              /* ✅ 右パネル以外を全て占有 */
+  flex: 1;
   display: block;
   background: #000;
   position: relative;
@@ -24,14 +24,14 @@ body {
 #sidePanel {
   display: flex;
   flex-direction: column;
-  height: 700px;
   width: 300px;
-  min-width: 300px;
+  min-width: 250px;
+  max-height: 100vh;      /* ✅ 高さ固定を廃止してレスポンシブ */
   background: #000;
   border-left: 2px solid #333;
   color: #fff;
   padding: 10px;
-  overflow-y: auto;     /* ✅ スクロール可能 */
+  overflow-y: auto;       /* ✅ スクロール可能 */
   z-index: 10;
 }
 
@@ -58,7 +58,7 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* ✅ チェックボックスとテキストを横並び＆中央揃え */
+/* === ラベル === */
 label {
   display: flex;
   align-items: center;
@@ -66,27 +66,24 @@ label {
   margin: 5px 0;
   font-size: 14px;
 }
-
-/* ✅ チェックボックスだけは幅固定にする */
 input[type="checkbox"] {
   width: auto !important;
   height: auto !important;
-  transform: scale(1.2); /* 少し大きく */
+  transform: scale(1.2);
 }
 
-/* ✅ スマホ用操作UI（十字ボタン） */
+/* === モバイル操作UI === */
 #mobileControls {
   position: fixed;
   bottom: 20px;
-  left: 10%;
+  left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  display: flex;              /* ✅ 常時表示 */
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
-
 #mobileControls button {
   width: 60px;
   height: 60px;
@@ -97,50 +94,62 @@ input[type="checkbox"] {
   border: 1px solid #999;
   touch-action: none;
 }
-
 #mobileControls div {
   display: flex;
   gap: 10px;
 }
 
-/* === グローバル設定 === */
+/* === 共通 === */
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden; 
+  overflow: hidden;
   touch-action: none;
 }
-
-.container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #222;
-  color: white;
-  font-size: calc(var(--vw, 1vw) * 5); /* JSで計算された安全なvw */
-  text-align: center;
-  box-sizing: border-box;
-  padding: 2%;
-}
-
 .field {
   display: flex;
 }
 
 /* --- レスポンシブ --- */
 
-/* スマホ全般（~414px） */
+/* スマホ（〜414px） */
 @media (max-width: 414px) {
   body {
-    font-size: 6px;
+    flex-direction: column;  /* 縦並び */
+    font-size: 12px;
   }
+  #sidePanel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    max-height: 40vh;       /* 下パネル */
+    border-left: none;
+    border-top: 2px solid #333;
+    font-size: 12px;
+  }
+  #visionCanvas {
+    width: 100%;
+    height: auto;
+  }
+  #mobileControls {
+    bottom: 42vh; /* サイドパネルの上に表示 */
+  }
+}
 
-  .container {
-    flex-direction: column;
-    padding: 0 0.5rem;
+/* タブレット（415px〜1024px） */
+@media (min-width: 415px) and (max-width: 1024px) {
+  body {
+    flex-direction: row;   /* 横並び維持 */
+  }
+  #sidePanel {
+    width: 250px;          /* 少し縮小 */
+    font-size: 14px;
+  }
+  #visionCanvas {
+    flex: 1;
   }
 }

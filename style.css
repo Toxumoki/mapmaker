@@ -5,33 +5,34 @@ body {
   color: #fff;
   font-family: Arial, sans-serif;
   display: flex;
-  flex-direction: row;  /* PCデフォルト: 横並び */
+  flex-direction: row;  /* ✅ キャンバスと右パネルを横並び */
   height: 100vh;
   overflow: hidden;
 }
 
 /* === キャンバス === */
 #visionCanvas {
-  flex: 1;
+  flex: 1;              /* ✅ 右パネル以外を全て占有 */
   display: block;
   background: #000;
   position: relative;
   z-index: 5;
   image-rendering: pixelated;
+  /* CSSで縮小しても内部キャンバス解像度は変わらない（script側で座標変換対応済み） */
 }
 
 /* === 右側UIパネル === */
 #sidePanel {
   display: flex;
   flex-direction: column;
-  width: 300px;
-  min-width: 250px;
-  max-height: 100vh;      /* ✅ 高さ固定を廃止してレスポンシブ */
+  height: 700px;            /* 元仕様（PC）: 固定高さ */
+  width: 300px;             /* 元仕様（PC）: 固定幅 */
+  min-width: 300px;
   background: #000;
   border-left: 2px solid #333;
   color: #fff;
   padding: 10px;
-  overflow-y: auto;       /* ✅ スクロール可能 */
+  overflow-y: auto;     /* ✅ スクロール可能 */
   z-index: 10;
 }
 
@@ -58,7 +59,7 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* === ラベル === */
+/* ✅ チェックボックスとテキストを横並び＆中央揃え */
 label {
   display: flex;
   align-items: center;
@@ -66,24 +67,29 @@ label {
   margin: 5px 0;
   font-size: 14px;
 }
+
+/* ✅ チェックボックスだけは幅固定にする */
 input[type="checkbox"] {
   width: auto !important;
   height: auto !important;
-  transform: scale(1.2);
+  transform: scale(1.2); /* 少し大きく */
 }
 
-/* === モバイル操作UI === */
+/* ✅ スマホ用操作UI（十字ボタン） */
+/* 元は中央寄せ（left:10% + translateX(-50%)）だったが、要望により
+   キャンバス外（左余白）に配置。最低限の変更のみ。 */
 #mobileControls {
   position: fixed;
   bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 12px;           /* ← 変更：キャンバス外 左余白に固定（常時） */
+  transform: none;      /* ← 変更：中央寄せ解除 */
   z-index: 20;
-  display: flex;
+  display: flex;              /* ✅ 常時表示 */
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
+
 #mobileControls button {
   width: 60px;
   height: 60px;
@@ -94,62 +100,88 @@ input[type="checkbox"] {
   border: 1px solid #999;
   touch-action: none;
 }
+
 #mobileControls div {
   display: flex;
   gap: 10px;
 }
 
-/* === 共通 === */
+/* === グローバル設定 === */
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: hidden; 
   touch-action: none;
 }
+
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #222;
+  color: white;
+  font-size: calc(var(--vw, 1vw) * 5); /* JSで計算された安全なvw */
+  text-align: center;
+  box-sizing: border-box;
+  padding: 2%;
+}
+
 .field {
   display: flex;
 }
 
 /* --- レスポンシブ --- */
+/* ここからは非破壊追記：既存PCスタイルを上書きしないよう注意して定義します */
 
-/* スマホ（〜414px） */
-@media (max-width: 414px) {
-  body {
-    flex-direction: column;  /* 縦並び */
-    font-size: 12px;
-  }
+/* 変数で最小パネル幅を管理（非破壊） */
+:root {
+  --sidepanel-min-width: 120px;
+  --sidepanel-default-width: 300px;
+}
+
+/* デフォルト（PC）: #sidePanel は元のまま（300px固定） */
+
+/* タブレット/スマホ向け共通ルール（パネルは常に右側に表示） */
+@media (max-width: 1024px) {
+  /* パネルの最小幅を担保しつつ相対縮小を許可 */
   #sidePanel {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
+    /* 元の min-width:300px を緩和して、狭い画面では縮むようにする */
+    width: 25%;              /* 相対的に小さくする（画面幅の25%） */
+    min-width: var(--sidepanel-min-width); /* 120px 以下にならない */
+    max-width: var(--sidepanel-default-width); /* 最大は元幅を越えない */
     height: auto;
-    max-height: 40vh;       /* 下パネル */
-    border-left: none;
-    border-top: 2px solid #333;
+    max-height: 100vh;      /* スクロール許可 */
+  }
+
+  /* キャンバスは常に残り幅に収まる（横スクロールを出さない） */
+  #visionCanvas {
+    flex: 1;
+    /* 常に「残り幅」を使う。calcで最小120pxを引いておくことでパネル分を確保 */
+    max-width: calc(100% - var(--sidepanel-min-width));
+    width: auto;
+    height: auto;
+  }
+
+  /* 微調整：パネル内リストの文字を少し縮小 */
+  #obstacleList li {
     font-size: 12px;
   }
-  #visionCanvas {
-    width: 100%;
-    height: auto;
-  }
+
+  /* モバイルコントロールは左余白に固定（そのまま） */
   #mobileControls {
-    bottom: 42vh; /* サイドパネルの上に表示 */
+    left: 12px;
+    bottom: 20px;
   }
 }
 
-/* タブレット（415px〜1024px） */
-@media (min-width: 415px) and (max-width: 1024px) {
-  body {
-    flex-direction: row;   /* 横並び維持 */
-  }
+/* さらに超狭幅デバイス向けの安全弁（もし画面が極端に狭い場合） */
+@media (max-width: 360px) {
   #sidePanel {
-    width: 250px;          /* 少し縮小 */
-    font-size: 14px;
-  }
-  #visionCanvas {
-    flex: 1;
+    width: 32%; /* 少し相対的に増やすことでUIの破綻を軽減 */
+    min-width: calc(var(--sidepanel-min-width) - 8px);
   }
 }
